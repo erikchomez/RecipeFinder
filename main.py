@@ -1,6 +1,7 @@
-from flask import Flask, request, redirect
-import spoonacular as sp
 from twilio.twiml.messaging_response import MessagingResponse
+from flask import Flask, request, redirect
+from collections import defaultdict
+import spoonacular as sp
 import os
 
 api = sp.API(os.environ.get('SPOONACULAR_KEY'))
@@ -51,16 +52,47 @@ def random_recipe_message() -> (str, str):  # (formatted message, image url)
     return 'Random Recipe:\n{title}\n{url}'.format(title=r_title, url=r_url), r_img
 
 
-def looking_for_message(food_items: list) -> str:
+def looking_for_message(data: dict) -> str:
     """"
-    Takes a list of annotations returned by call to Spoonacular API and returns a formatted message with
+    Takes a dict returned by call to Spoonacular API and returns a formatted message with
     only the food items
-    :food_items list of annotations
+    :food_items dict of parsed search query
     :return formatted message
     """
-    list_food_items = ', '.join([i['annotation'] for i in food_items])
+    print(data)
 
-    return 'looking for a recipe that contains: {}'.format(list_food_items)
+    params = {
+                'includeIngredients': [],
+                'excludeIngredients': []
+                # 'cuisines': [],
+                # 'modifiers': []
+             }
+    dish_query = {'query': ''}
+
+    for k, v in data.items():
+        if k == 'ingredients':
+            for i in v:
+                if i['include']:
+                    params['includeIngredients'].append(i['name'])
+                else:
+                    params['excludeIngredients'].append(i['name'])
+
+        elif k == 'dishes':
+            for i in v:
+                dish_query['query'] = i['name']
+
+        elif k == 'cuisines':
+            pass
+
+        elif k == 'modifiers':
+            pass
+
+    print(params)
+    print(dish_query['query'])
+    #response = api.search_recipes_complex(dish_query['query'], params)
+    #print(response)
+
+    return 'stub'
 
 
 @app.route('/sms', methods=['GET', 'POST'])
@@ -86,10 +118,10 @@ def sms_reply():
         msg.media(random_recipe[1])
 
     else:
-        # we will check the text for food items, such as dish names and ingredients
-        response = api.detect_food_in_text(body)
+        # we will analyze the text for food items, such as dish names and ingredients
+        response = api.analyze_a_recipe_search_query(body)
         data = response.json()
-        resp.message(looking_for_message(data['annotations']))
+        resp.message(looking_for_message(data))
 
     return str(resp)
 
